@@ -187,11 +187,21 @@ def extract_matches(user_input, tag_dict):
     input_lower = user_input.lower()
     global_spans = []
 
+    # --- Height extraction ---
+    # Comprehensive patterns for feet/inches, cm, meters, and written forms
     height_patterns = [
-        r'\b(?:above|over|at least|minimum|around|about)?\s*(\d{1})[\'′′’]\s*(\d{1,2})(?:[\"″]?)\b',
-        r'\b(\d{1})\s*(?:feet|ft)\s*(\d{1,2})?\s*(?:inches|in)?\b',
-        r'\b(?:above|over|at least|minimum)?\s*(\d{1}\.\d{1,2})\s*(?:feet|ft|inches|in)?\b',
-        r'\b(five|six|seven|eight|nine|ten|eleven|twelve)\s*(?:feet|foot)\s*(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)?\s*(?:inches|in)?\b'
+        # Feet & inches: 5'11", 6' 2", 5 ft 10 in, 5 feet 8 inches
+        r"\b([4-7])['′]\s?(\d{1,2})[\"″]?\b",  # 5'11", 6'2"
+        r"\b([4-7])\s?ft\.?\s?(\d{1,2})\s?(in|inches)?\b",  # 5 ft 10 in
+        r"\b([4-7])\s?feet\s?(\d{1,2})\s?(inches|inch)?\b",  # 5 feet 8 inches
+        # Inches only: 72 inches, 70in
+        r"\b([5-8][0-9])\s?(in|inches)\b",  # 72 inches
+        # Centimeters: 180 cm, 170 centimeters
+        r"\b(1[0-9]{2}|2[0-4][0-9])\s?(cm|centimeters?)\b",  # 180 cm
+        # Meters: 1.75 m, 1,80 m
+        r"\b([1-2](?:[.,]\d{1,2}))\s?(m|meters?)\b",  # 1.75 m, 1,80 m
+        # Written out: six feet two, five foot eleven
+        r"\b(four|five|six|seven)\s?(feet|foot|ft)\s?(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)?\b"
     ]
     height_matches = []
     for pattern in height_patterns:
@@ -206,11 +216,21 @@ def extract_matches(user_input, tag_dict):
     if height_matches:
         matches.setdefault("height", []).extend(height_matches)
 
-    # --- Age extraction (keep improved logic) ---
+    # --- Age extraction (exclude gender/role words) ---
+    # Comprehensive patterns for numeric, ranges, written, and open/flexible age
     age_patterns = [
-        r'\b(?:age|aged|at the age of|at the age|is|turning|turns|will be|she is|he is|they are|i am|i\'m|she\'s|he\'s|they\'re)?\s*(\d{1,3})\s*(?:years old|yrs old|yrs|years)?\b',
-        r'\b(\d{1,3})\s*(?:years old|yrs old|yrs|years)\b',
-        r'\b(?:age|aged)\s*(\d{1,3})\b'
+        # Numeric age: 25 years old, 32 y/o, age 40, I'm 29
+        r"\b([1-9][0-9])\s?(years? old|y/o|yrs? old|yo)\b",  # 25 years old, 32 y/o
+        r"\bage\s?([1-9][0-9])\b",  # age 40
+        r"\bI'?m\s?([1-9][0-9])\b",  # I'm 29
+        # Age ranges: 20-25, between 30 and 35, in my 40s
+        r"\b([1-9][0-9])\s?[-–]\s?([1-9][0-9])\b",  # 20-25
+        r"\bbetween\s([1-9][0-9])\s?(and|to)\s?([1-9][0-9])\b",  # between 30 and 35
+        r"\bin my (\d{2})s\b",  # in my 40s
+        # Written out: twenty five years old
+        r"\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)([-\s]?(one|two|three|four|five|six|seven|eight|nine))?\s?(years? old|y/o|yrs? old|yo)?\b",
+        # Open/flexible age phrases
+        r"\b(whatever the age|any age|no age bar|no age limit|open age|all ages|no bar for age|no age restriction|no age preference)\b"
     ]
     age_matches = []
     for pattern in age_patterns:
@@ -220,24 +240,41 @@ def extract_matches(user_input, tag_dict):
                 continue
             matched = user_input[span[0]:span[1]]
             global_spans.append(span)
-            norm = normalize_age(matched)
-            age_matches.append(norm)
+            age_matches.append(matched.strip())
     if age_matches:
-        csv_values = set([normalize_age(v) for v in tag_dict.get('age', set())])
-        for a in age_matches:
-            if a in csv_values:
-                matches.setdefault('age', []).append(a)
-            else:
-                # Fuzzy: allow +/- 1 year
-                for v in csv_values:
-                    try:
-                        if abs(int(v)-int(a)) <= 1:
-                            matches.setdefault('age', []).append(v)
-                            break
-                    except:
-                        continue
-    # --- Existing tag matching logic ---
+        matches.setdefault('age', []).extend(age_matches)
+
+    # --- Context-aware extraction for smoking and alcohol ---
+    # Improved negation/avoidance patterns to handle 'avoid alcohol and smoking', etc.
+    non_smoking_patterns = [
+        r"avoid[\w\s,]*smoking", r"no[\w\s,]*smoking", r"does not smoke", r"never smokes?", r"non[- ]smoking", r"doesn't smoke", r"don't smoke", r"not smoke", r"without smoking"
+    ]
+    non_drinking_patterns = [
+        r"avoid[\w\s,]*alcohol", r"no[\w\s,]*alcohol", r"does not drink", r"never drinks?", r"non[- ]drinking", r"doesn't drink", r"don't drink", r"not drink", r"without alcohol"
+    ]
+    input_lower = user_input.lower()
+    found_non_smoking = any(re.search(p, input_lower) for p in non_smoking_patterns)
+    found_non_drinking = any(re.search(p, input_lower) for p in non_drinking_patterns)
+
+    # Remove any existing matches for 'smoking_drinking habits' before tag dict matching
+    if 'smoking_drinking habits' in matches:
+        del matches['smoking_drinking habits']
+
+    # Add non-smoking/non-drinking if negation/avoidance is found
+    non_habits = []
+    if found_non_smoking:
+        non_habits.append('non-smoking')
+    if found_non_drinking:
+        non_habits.append('non-drinking')
+    if non_habits:
+        matches['smoking_drinking habits'] = non_habits
+
+    # Only if not negated, allow normal tag dict matching for 'smoking_drinking habits'
     for tag, values in tag_dict.items():
+        if tag == "height":
+            continue  # Only match height via regex, not tag dict
+        if tag == "smoking_drinking habits" and (found_non_smoking or found_non_drinking):
+            continue  # Skip normal matching if negation/avoidance found
         found_phrases = []
         for value in sorted(values, key=lambda x: -len(x)):
             pattern = r'(?<!\w)' + re.escape(value) + r'(?!\w)'
@@ -252,6 +289,7 @@ def extract_matches(user_input, tag_dict):
                         found_phrases.append(matched_phrase)
         if found_phrases:
             matches[tag] = found_phrases
+
     return matches, global_spans
 
 def semantic_learn(user_input, tag_dict, used_spans, all_existing_embeddings):
@@ -293,7 +331,7 @@ def semantic_learn(user_input, tag_dict, used_spans, all_existing_embeddings):
             best_tag = "location"
         elif ent_label == "ORG":
             best_tag = "profession"  # or a new tag if you want
-        if best_score > 0.70 and best_tag:
+        if best_score > 0.75 and best_tag:
             existing_values = tag_dict[best_tag]
             if not is_near_duplicate(phrase, existing_values) and is_valid_for_tag(best_tag, phrase, tag_dict):
                 learned.setdefault(best_tag, []).append(phrase)
