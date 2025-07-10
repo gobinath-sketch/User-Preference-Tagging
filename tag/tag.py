@@ -188,22 +188,35 @@ def extract_matches(user_input, tag_dict):
     global_spans = []
 
     # --- Height extraction ---
-    # Comprehensive patterns for feet/inches, cm, meters, and written forms
+    # Expanded patterns for all real-world, ambiguous, rare, informal, and range-based height expressions
     height_patterns = [
-        # Feet & inches: 5'11", 6' 2", 5 ft 10 in, 5 feet 8 inches
+        # Standard feet & inches
         r"\b([4-7])['′]\s?(\d{1,2})[\"″]?\b",  # 5'11", 6'2"
         r"\b([4-7])\s?ft\.?\s?(\d{1,2})\s?(in|inches)?\b",  # 5 ft 10 in
         r"\b([4-7])\s?feet\s?(\d{1,2})\s?(inches|inch)?\b",  # 5 feet 8 inches
-        # Inches only: 72 inches, 70in
+        # Inches only
         r"\b([5-8][0-9])\s?(in|inches)\b",  # 72 inches
-        # Centimeters: 180 cm, 170 centimeters
+        # Centimeters
         r"\b(1[0-9]{2}|2[0-4][0-9])\s?(cm|centimeters?)\b",  # 180 cm
-        # Meters: 1.75 m, 1,80 m
+        # Meters
         r"\b([1-2](?:[.,]\d{1,2}))\s?(m|meters?)\b",  # 1.75 m, 1,80 m
         # Written out: six feet two, five foot eleven
-        r"\b(four|five|six|seven)\s?(feet|foot|ft)\s?(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)?\b"
+        r"\b(four|five|six|seven)\s?(feet|foot|ft)\s?(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)?\b",
+        # Rare/informal: five and a half feet, five eleven
+        r"\b(four|five|six|seven)\s?(and a half|and half)\s?(feet|foot|ft)\b",  # five and a half feet
+        r"\b(four|five|six|seven)\s?eleven\b",  # five eleven
+        r"\b(\d)\s?foot[s]?\s?(\d{1,2})?\b",  # 5 foot 11, 5 foot
+        # Slang: five eleven, six two
+        r"\b(four|five|six|seven)\s?(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b",  # five eleven
+        # Creative spacing/typos
+        r"\b(\d)\s?['′]\s?(\d{1,2})\b",  # 5 ' 11
+        # Ranges: 5'10" to 6'0", between 5'8" and 6'0"
+        r"\b([4-7]['′]\d{1,2})\s?(to|\-|and|–)\s?([4-7]['′]\d{1,2})\b",  # 5'10" to 6'0"
+        r"\bbetween\s([4-7]['′]\d{1,2})\s?(and|to|-)\s?([4-7]['′]\d{1,2})\b",  # between 5'8" and 6'0"
     ]
+    ambiguous_height_pattern = r"\b(tall|short|average height|medium height|medium tall|medium short|about \d{1,2}|around \d{1,2}|approximately \d{1,2})\b"
     height_matches = []
+    explicit_spans = []
     for pattern in height_patterns:
         for match in re.finditer(pattern, input_lower):
             span = match.span()
@@ -212,7 +225,16 @@ def extract_matches(user_input, tag_dict):
             matched = user_input[span[0]:span[1]]
             global_spans.append(span)
             height_matches.append(matched.strip())
-
+            explicit_spans.append(span)
+    # Only add ambiguous/approximate if no explicit match overlaps or is adjacent
+    for match in re.finditer(ambiguous_height_pattern, input_lower):
+        span = match.span()
+        # Check for overlap or adjacency with explicit spans
+        if any(abs(span[0] - e[1]) <= 1 or abs(span[1] - e[0]) <= 1 or (span[0] < e[1] and span[1] > e[0]) for e in explicit_spans):
+            continue
+        matched = user_input[span[0]:span[1]]
+        global_spans.append(span)
+        height_matches.append(matched.strip())
     if height_matches:
         matches.setdefault("height", []).extend(height_matches)
 
