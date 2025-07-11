@@ -238,31 +238,124 @@ def extract_matches(user_input, tag_dict):
     if height_matches:
         matches.setdefault("height", []).extend(height_matches)
 
-    # --- Age extraction (exclude gender/role words) ---
-    # Comprehensive patterns for numeric, ranges, written, and open/flexible age
+    # --- Age extraction (comprehensive like height) ---
+    # Expanded patterns for all real-world, ambiguous, rare, informal, and range-based age expressions
     age_patterns = [
-        # Numeric age: 25 years old, 32 y/o, age 40, I'm 29
+        # Complete phrases first (longest matches)
+        r"\b(?:somewhere\s+)?between\s([1-9][0-9])\s?(and|to)\s?([1-9][0-9])\s?(years? old|y/o|yrs? old|yo|years? of age)\b",  # between 30 and 32 years of age (with or without somewhere)
+        r"\bbetween\s([1-9][0-9])\s?(and|to)\s?([1-9][0-9])\s?(years? old|y/o|yrs? old|yo|years? of age)\b",  # between 30 and 35 years of age
+        r"\b([1-9][0-9])\s?(to|and)\s?([1-9][0-9])\s?(years? old|y/o|yrs? old|yo|years? of age)\b",  # 30 to 35 years old/age
+        # Standard numeric age: 25 years old, 32 y/o, age 40, I'm 29
         r"\b([1-9][0-9])\s?(years? old|y/o|yrs? old|yo)\b",  # 25 years old, 32 y/o
         r"\bage\s?([1-9][0-9])\b",  # age 40
         r"\bI'?m\s?([1-9][0-9])\b",  # I'm 29
+        r"\b([1-9][0-9])\s?(years? of age)\b",  # 30 years of age
+        r"\b([1-9][0-9])\s?(years?)\b",  # 30 years
+        r"\b([1-9][0-9])\s?(yrs?)\b",  # 30 yrs
         # Age ranges: 20-25, between 30 and 35, in my 40s
         r"\b([1-9][0-9])\s?[-–]\s?([1-9][0-9])\b",  # 20-25
-        r"\bbetween\s([1-9][0-9])\s?(and|to)\s?([1-9][0-9])\b",  # between 30 and 35
+        r"\bbetween\s([1-9][0-9])\s?(and|to)\s?([1-9][0-9])\b",  # between 30 and 35 (without years)
         r"\bin my (\d{2})s\b",  # in my 40s
-        # Written out: twenty five years old
-        r"\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)([-\s]?(one|two|three|four|five|six|seven|eight|nine))?\s?(years? old|y/o|yrs? old|yo)?\b",
-        # Open/flexible age phrases
-        r"\b(whatever the age|any age|no age bar|no age limit|open age|all ages|no bar for age|no age restriction|no age preference)\b"
+        r"\b([1-9][0-9])s\b",  # 40s
+        # Written out: twenty five years old, thirty-one years of age
+        r"\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)([-\s]?(one|two|three|four|five|six|seven|eight|nine))?\s?(years? old|y/o|yrs? old|yo|years? of age)?\b",
+        # Early/mid/late expressions: early thirties, mid 30s, late twenties
+        r"\b(early|mid|middle|late)\s(twenties?|thirties?|forties?|fifties?|sixties?|seventies?|eighties?|nineties?)\b",  # early thirties
+        r"\b(early|mid|middle|late)\s(\d{2})s\b",  # early 30s
+        # More comprehensive age patterns
+        r"\b(possibly|maybe|around|about|approximately|roughly|close to|near|in her|in his|in their)\s(early|mid|middle|late)\s(twenties?|thirties?|forties?|fifties?|sixties?|seventies?|eighties?|nineties?)\b",  # possibly in her early thirties
+        r"\b(possibly|maybe|around|about|approximately|roughly|close to|near)\s(\d{2})s\b",  # possibly in her 30s
+        r"\b(age|aged)\s(early|mid|middle|late)\s(twenties?|thirties?|forties?|fifties?|sixties?|seventies?|eighties?|nineties?)\b",  # age early thirties
+        r"\b(age|aged)\s(\d{2})s\b",  # age 30s
+        # Written ranges: between twenty and thirty, twenty to thirty-five
+        r"\bbetween\s(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)([-\s]?(one|two|three|four|five|six|seven|eight|nine))?\s?(and|to)\s?(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)([-\s]?(one|two|three|four|five|six|seven|eight|nine))?\s?(years? old|y/o|yrs? old|yo|years? of age)?\b",
+        r"\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)([-\s]?(one|two|three|four|five|six|seven|eight|nine))?\s?(to|and)\s?(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)([-\s]?(one|two|three|four|five|six|seven|eight|nine))?\s?(years? old|y/o|yrs? old|yo|years? of age)?\b",
+        r"\bsomewhere between\s(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)([-\s]?(one|two|three|four|five|six|seven|eight|nine))?\s?(and|to)\s?(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)([-\s]?(one|two|three|four|five|six|seven|eight|nine))?\s?(years? old|y/o|yrs? old|yo|years? of age)?\b",
+        # Approximate age: around 30, about 25, approximately 35
+        r"\b(around|about|approximately|roughly|close to)\s([1-9][0-9])\b",  # around 30
+        r"\b(around|about|approximately|roughly|close to)\s(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)([-\s]?(one|two|three|four|five|six|seven|eight|nine))?\b",
+        # Age with context: someone in their 30s, a person aged 25
+        r"\b(aged|age)\s([1-9][0-9])\b",  # aged 25
+        r"\b(someone|person|girl|boy|man|woman)\s(in their|of age)\s([1-9][0-9])s?\b",  # someone in their 30s
+        r"\b([1-9][0-9])\s?(year old|years old)\s?(girl|boy|man|woman|person)\b",  # 25 year old girl
+        # Open/flexible age phrases (only age-specific ones)
+        r"\b(whatever the age|any age|no age bar|no age limit|open age|all ages|no bar for age|no age restriction|no age preference|age doesn't matter|age is not important)\b",
+        # Any age-related words that might appear
+        r"\b(age|aged|aging|years?|yrs?|old|young|elderly|senior|adult|teen|teenager|adolescent|child|kid|baby|infant|toddler|preschooler|school-age|college-age|working-age|retirement-age|middle-aged|young adult|older adult|senior citizen|centenarian)\b",
+        # Creative spacing/typos
+        r"\b([1-9][0-9])\s?['′]\s?(years? old|y/o|yrs? old|yo)\b",  # 30 ' years old
+        # Standalone numbers that could be age (with context check)
+        r"\b([1-9][0-9])\b",  # 30 (will be filtered by context)
     ]
+    
+    # Patterns for context that indicates a number is likely age
+    age_context_patterns = [
+        r"\b(around|about|approximately|roughly|close to)\s([1-9][0-9])\b",
+        r"\b([1-9][0-9])\s?(years? old|y/o|yrs? old|yo|years? of age)\b",
+        r"\b(aged|age)\s([1-9][0-9])\b",
+        r"\b([1-9][0-9])\s?(year old|years old)\s?(girl|boy|man|woman|person)\b",
+        r"\b(someone|person|girl|boy|man|woman)\s(in their|of age)\s([1-9][0-9])s?\b",
+        r"\b([1-9][0-9])\s?(to|and)\s?([1-9][0-9])\s?(years? old|y/o|yrs? old|yo|years? of age)\b",
+        r"\bbetween\s([1-9][0-9])\s?(and|to)\s?([1-9][0-9])\b",
+    ]
+    
     age_matches = []
-    for pattern in age_patterns:
+    explicit_spans = []
+    
+    # First pass: collect all explicit age matches
+    for pattern in age_patterns[:-1]:  # Exclude the last pattern (standalone numbers)
         for match in re.finditer(pattern, input_lower):
             span = match.span()
             if any(start < span[1] and end > span[0] for start, end in global_spans):
                 continue
+            
+            # Extract the actual age part, excluding "somewhere" if present
+            matched = user_input[span[0]:span[1]]
+            if matched.lower().startswith('somewhere '):
+                # Find where the actual age expression starts
+                age_start = matched.lower().find('between')
+                if age_start != -1:
+                    matched = matched[age_start:]  # Start from "between"
+            
+            global_spans.append(span)
+            age_matches.append(matched.strip())
+            explicit_spans.append(span)
+    
+    # Second pass: check standalone numbers for age context
+    for match in re.finditer(r"\b([1-9][0-9])\b", input_lower):
+        span = match.span()
+        if any(start < span[1] and end > span[0] for start, end in global_spans):
+            continue
+        
+        # Check if this number has age context
+        number = match.group(1)
+        context_start = max(0, span[0] - 50)
+        context_end = min(len(input_lower), span[1] + 50)
+        context = input_lower[context_start:context_end]
+        
+        # Look for age-related words in context - be very comprehensive
+        age_indicators = ['age', 'years', 'old', 'aged', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety', 'twenty', 'between', 'somewhere', 'early', 'mid', 'late', 'thirties', 'twenties', 'forties', 'fifties', 'sixties', 'seventies', 'eighties', 'nineties', 'young', 'elderly', 'senior', 'adult', 'teen', 'adolescent', 'child', 'baby', 'infant', 'toddler', 'preschooler', 'school-age', 'college-age', 'working-age', 'retirement-age', 'middle-aged', 'young adult', 'older adult', 'senior citizen', 'centenarian']
+        has_age_context = any(indicator in context for indicator in age_indicators)
+        
+        # More specific age context patterns
+        specific_age_context = (
+            re.search(rf"\b{number}\s?(years?|yrs?)\b", context) is not None or
+            re.search(rf"\bage\s{number}\b", context) is not None or
+            re.search(rf"\b{number}\s?(year old|years old)\b", context) is not None or
+            re.search(rf"\b{number}\s?(to|and)\s?(\d{{2}})\b", context) is not None or
+            re.search(rf"\b(\d{{2}})\s?(to|and)\s?{number}\b", context) is not None
+        )
+        
+        # Check if it's in a range pattern
+        is_in_range = (re.search(rf"\b{number}\s?(to|and|-|–)\s?(\d{{2}})\b", context) is not None or 
+                      re.search(rf"\b(\d{{2}})\s?(to|and|-|–)\s?{number}\b", context) is not None)
+        
+        if has_age_context or is_in_range or specific_age_context:
             matched = user_input[span[0]:span[1]]
             global_spans.append(span)
             age_matches.append(matched.strip())
+            explicit_spans.append(span)
+    
     if age_matches:
         matches.setdefault('age', []).extend(age_matches)
 
@@ -302,8 +395,27 @@ def extract_matches(user_input, tag_dict):
             pattern = r'(?<!\w)' + re.escape(value) + r'(?!\w)'
             for match in re.finditer(pattern, input_lower):
                 start, end = match.start(), match.end()
-                if any(start < e and end > s for s, e in global_spans):
-                    continue
+                # For age, be more lenient with span conflicts to ensure no exceptions
+                if tag == "age":
+                    # Only skip if there's a complete overlap with existing matches
+                    has_complete_overlap = any(start >= s and end <= e for s, e in global_spans)
+                    if has_complete_overlap:
+                        continue
+                    # For age, also check if the matched phrase is actually age-related
+                    # Skip very generic phrases that might be in age.csv but aren't really age
+                    if len(value) < 4 or value in ['age', 'old', 'young', 'adult', 'child', 'teen']:
+                        # Only include these if they have proper age context
+                        context_start = max(0, start - 20)
+                        context_end = min(len(input_lower), end + 20)
+                        context = input_lower[context_start:context_end]
+                        age_context_words = ['years', 'thirties', 'twenties', 'forties', 'fifties', 'sixties', 'seventies', 'eighties', 'nineties', 'aged', 'turning', 'birth', 'born']
+                        if not any(word in context for word in age_context_words):
+                            continue
+                else:
+                    # For other tags, use strict span checking
+                    if any(start < e and end > s for s, e in global_spans):
+                        continue
+                
                 matched_phrase = user_input[start:end].strip(string.punctuation + " ")
                 global_spans.append((start, end))
                 if is_valid_for_tag(tag, matched_phrase.lower(), tag_dict):
