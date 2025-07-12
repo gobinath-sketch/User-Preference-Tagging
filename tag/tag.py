@@ -126,6 +126,12 @@ def load_tags(tags_dir):
                 reader = csv.reader(f)
                 for row in reader:
                     for item in row:
+                        # First add the complete item as-is
+                        cleaned_item = item.strip().lower()
+                        if cleaned_item and cleaned_item not in STOP_WORDS and len(cleaned_item) > 2:
+                            values.add(cleaned_item)
+                        
+                        # Then also add individual chunks for flexibility
                         for chunk in re.split(r'[;,.\(\)\[\]]+', item):
                             cleaned = chunk.strip().lower()
                             if cleaned and cleaned not in STOP_WORDS and len(cleaned) > 2:
@@ -322,10 +328,12 @@ def extract_matches(user_input, tag_dict):
     # --- Context-aware extraction for smoking and alcohol ---
     # Improved negation/avoidance patterns to handle 'avoid alcohol and smoking', etc.
     non_smoking_patterns = [
-        r"avoid[\w\s,]*smoking", r"no[\w\s,]*smoking", r"does not smoke", r"never smokes?", r"non[- ]smoking", r"doesn't smoke", r"don't smoke", r"not smoke", r"without smoking"
+        r"avoid[\w\s,]*smoking", r"no[\w\s,]*smoking", r"does not smoke", r"never smokes?", r"non[- ]smoking", r"doesn't smoke", r"don't smoke", r"not smoke", r"without smoking",
+        r"don't[\w\s,]*smoke", r"do not[\w\s,]*smoke", r"never[\w\s,]*smoke", r"no[\w\s,]*smoking", r"non[- ]smoker"
     ]
     non_drinking_patterns = [
-        r"avoid[\w\s,]*alcohol", r"no[\w\s,]*alcohol", r"does not drink", r"never drinks?", r"non[- ]drinking", r"doesn't drink", r"don't drink", r"not drink", r"without alcohol"
+        r"avoid[\w\s,]*alcohol", r"no[\w\s,]*alcohol", r"does not drink", r"never drinks?", r"non[- ]drinking", r"doesn't drink", r"don't drink", r"not drink", r"without alcohol",
+        r"don't[\w\s,]*drink", r"do not[\w\s,]*drink", r"never[\w\s,]*drink", r"no[\w\s,]*drinking", r"non[- ]drinker"
     ]
     input_lower = user_input.lower()
     found_non_smoking = any(re.search(p, input_lower) for p in non_smoking_patterns)
@@ -338,9 +346,9 @@ def extract_matches(user_input, tag_dict):
     # Add non-smoking/non-drinking if negation/avoidance is found
     non_habits = []
     if found_non_smoking:
-        non_habits.append('non-smoking')
+        non_habits.append('don\'t smoke')
     if found_non_drinking:
-        non_habits.append('non-drinking')
+        non_habits.append('don\'t drink')
     if non_habits:
         matches['smoking_drinking habits'] = non_habits
 
@@ -348,8 +356,8 @@ def extract_matches(user_input, tag_dict):
     for tag, values in tag_dict.items():
         if tag == "height":
             continue  # Only match height via regex, not tag dict
-        if tag == "smoking_drinking habits" and (found_non_smoking or found_non_drinking):
-            continue  # Skip normal matching if negation/avoidance found
+        # Allow semantic learning for smoking_drinking habits even if negation found
+        # The semantic learning will handle context better than simple regex
         found_phrases = []
         for value in sorted(values, key=lambda x: -len(x)):
             pattern = r'(?<!\w)' + re.escape(value) + r'(?!\w)'
