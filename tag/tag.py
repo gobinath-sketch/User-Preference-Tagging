@@ -448,7 +448,7 @@ def semantic_learn(user_input, tag_dict, used_spans, all_existing_embeddings):
             best_tag = "location"
         elif ent_label == "ORG":
             best_tag = "profession"# or a new tag if you want
-        if best_score > 0.55 and best_tag:
+        if best_score > 0.70 and best_tag:
             existing_values = tag_dict[best_tag]
             if not is_near_duplicate(phrase, existing_values) and is_valid_for_tag(best_tag, phrase, tag_dict):
                 learned.setdefault(best_tag, []).append(phrase)
