@@ -218,7 +218,9 @@ def extract_matches(user_input, tag_dict):
     # --- Age extraction (comprehensive like height) ---
     # Expanded patterns for all real-world, ambiguous, rare, informal, and range-based age expressions
     age_patterns = [
-        # Complete phrases first (longest matches)
+        # Complete phrases first (longest matches) - PRIORITY ORDER
+        r"\b([1-9][0-9])-year-old\b",  # 24-year-old, 30-year-old (HIGHEST PRIORITY)
+        r"\b([1-9][0-9])\s?year\s?old\b",  # 24 year old, 30 year old
         r"\b(?:somewhere\s+)?between\s([1-9][0-9])\s?(and|to)\s?([1-9][0-9])\s?(years? old|y/o|yrs? old|yo|years? of age)\b",  # between 30 and 32 years of age (with or without somewhere)
         r"\bbetween\s([1-9][0-9])\s?(and|to)\s?([1-9][0-9])\s?(years? old|y/o|yrs? old|yo|years? of age)\b",  # between 30 and 35 years of age
         r"\b([1-9][0-9])\s?(to|and)\s?([1-9][0-9])\s?(years? old|y/o|yrs? old|yo|years? of age)\b",  # 30 to 35 years old/age
@@ -275,13 +277,23 @@ def extract_matches(user_input, tag_dict):
             if any(start < span[1] and end > span[0] for start, end in global_spans):
                 continue
             
-            # Extract the actual age part, excluding "somewhere" if present
+            # Extract the complete matched phrase
             matched = user_input[span[0]:span[1]]
+            
+            # Handle special cases
             if matched.lower().startswith('somewhere '):
                 # Find where the actual age expression starts
                 age_start = matched.lower().find('between')
                 if age_start != -1:
                     matched = matched[age_start:]  # Start from "between"
+            
+            # For X-year-old format, keep the complete phrase
+            if re.match(r'\b\d{1,2}-year-old\b', matched.lower()):
+                # Keep the complete "24-year-old" format
+                pass
+            elif re.match(r'\b\d{1,2}\s?year\s?old\b', matched.lower()):
+                # Keep the complete "24 year old" format
+                pass
             
             global_spans.append(span)
             age_matches.append(matched.strip())
@@ -356,6 +368,9 @@ def extract_matches(user_input, tag_dict):
     for tag, values in tag_dict.items():
         if tag == "height":
             continue  # Only match height via regex, not tag dict
+        if tag == "age" and "age" in matches:
+            continue  # Skip age tag dict matching if we already have age matches from regex
+        
         # Allow semantic learning for smoking_drinking habits even if negation found
         # The semantic learning will handle context better than simple regex
         found_phrases = []
