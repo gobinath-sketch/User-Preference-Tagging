@@ -153,35 +153,6 @@ def log_semantic_match(phrase, tag, score):
     with open(SEMANTIC_LOG, 'a', encoding='utf-8') as log:
         log.write(f'{datetime.now()} | "{phrase}" matched "{tag}" with score {round(score, 3)}\n')
 
-def normalize_age(age_str):
-    # Extract just the number (e.g., '30 years old' -> '30')
-    match = re.search(r'(\d{1,3})', age_str)
-    if match:
-        return match.group(1)
-    return age_str.strip().lower()
-
-def normalize_height(height_str):
-    # Convert word-based heights to numeric (e.g., 'five feet eleven inches' -> '5 ft 11 in')
-    word2num = {'zero':0, 'one':1, 'two':2, 'three':3, 'four':4, 'five':5, 'six':6, 'seven':7, 'eight':8, 'nine':9, 'ten':10, 'eleven':11, 'twelve':12}
-    s = height_str.lower()
-    # Replace word numbers with digits
-    for word, num in word2num.items():
-        s = re.sub(r'\b'+word+r'\b', str(num), s)
-    # Standardize format
-    s = s.replace('feet', 'ft').replace('foot', 'ft').replace('inches', 'in').replace('inch', 'in')
-    s = re.sub(r'\s+', ' ', s)
-    # Try to extract patterns like '5 ft 11 in'
-    match = re.search(r'(\d+)\s*ft\s*(\d+)?\s*in', s)
-    if match:
-        ft = match.group(1)
-        inch = match.group(2) if match.group(2) else '0'
-        return f"{ft} ft {inch} in"
-    # Try to extract patterns like 5'11
-    match = re.search(r'(\d+)[\'′′’](\d+)', s)
-    if match:
-        return f"{match.group(1)} ft {match.group(2)} in"
-    return s.strip()
-
 def extract_matches(user_input, tag_dict):
     matches = {}
     input_lower = user_input.lower()
@@ -286,17 +257,6 @@ def extract_matches(user_input, tag_dict):
         r"\b([1-9][0-9])\s?['′]\s?(years? old|y/o|yrs? old|yo)\b",  # 30 ' years old
         # Standalone numbers that could be age (with context check)
         r"\b([1-9][0-9])\b",  # 30 (will be filtered by context)
-    ]
-    
-    # Patterns for context that indicates a number is likely age
-    age_context_patterns = [
-        r"\b(around|about|approximately|roughly|close to)\s([1-9][0-9])\b",
-        r"\b([1-9][0-9])\s?(years? old|y/o|yrs? old|yo|years? of age)\b",
-        r"\b(aged|age)\s([1-9][0-9])\b",
-        r"\b([1-9][0-9])\s?(year old|years old)\s?(girl|boy|man|woman|person)\b",
-        r"\b(someone|person|girl|boy|man|woman)\s(in their|of age)\s([1-9][0-9])s?\b",
-        r"\b([1-9][0-9])\s?(to|and)\s?([1-9][0-9])\s?(years? old|y/o|yrs? old|yo|years? of age)\b",
-        r"\bbetween\s([1-9][0-9])\s?(and|to)\s?([1-9][0-9])\b",
     ]
     
     age_matches = []
