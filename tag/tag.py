@@ -335,7 +335,12 @@ def extract_matches(user_input, tag_dict):
             explicit_spans.append(span)
     
     if age_matches:
-        matches.setdefault('age', []).extend(age_matches)
+        # Remove generic 'age' if more specific matches exist
+        filtered = [m for m in age_matches if m.strip().lower() != "age"]
+        if filtered:
+            matches.setdefault('age', []).extend(filtered)
+        else:
+            matches.setdefault('age', []).extend(age_matches)
 
     # --- Context-aware extraction for smoking and alcohol ---
     # Improved negation/avoidance patterns to handle 'avoid alcohol and smoking', etc.
